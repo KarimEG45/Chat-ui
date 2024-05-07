@@ -25,6 +25,14 @@
 	import { base } from "$app/paths";
 	import { useConvTreeStore } from "$lib/stores/convTree";
 
+	function addInlineCitations(md: string, webSearchSources: WebSearchUpdate["sources"] = []) {
+		return md.replace(/ *\[\[(\d+)\]\]/gm, (textToReplace, index) => {
+			const source = webSearchSources[Number(index) - 1];
+			if (!source) return "";
+			return ` <sup><a href="${source.link}" target="_blank" rel="noreferrer" class="text-primary-400 no-underline hover:underline font-bold">${index}</a></sup>`;
+		});
+	}
+
 	function sanitizeMd(md: string) {
 		let ret = md
 			.replace(/<\|[a-z]*$/, "")
@@ -100,7 +108,7 @@
 		})
 	);
 
-	$: tokens = marked.lexer(sanitizeMd(message.content));
+	$: tokens = marked.lexer(addInlineCitations(sanitizeMd(message.content), webSearchSources));
 
 	$: emptyLoad =
 		!message.content && (webSearchIsDone || (searchUpdates && searchUpdates.length === 0));
@@ -227,7 +235,7 @@
 			{#if webSearchSources?.length}
 				<div class="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
 					<div class="text-gray-400">Sources:</div>
-					{#each webSearchSources as { link, title, hostname }}
+					{#each webSearchSources as { link, title }}
 						<a
 							class="flex items-center gap-2 whitespace-nowrap rounded-lg border bg-white px-2 py-1.5 leading-none hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700"
 							href={link}
@@ -235,10 +243,10 @@
 						>
 							<img
 								class="h-3.5 w-3.5 rounded"
-								src="https://www.google.com/s2/favicons?sz=64&domain_url={hostname}"
+								src="https://www.google.com/s2/favicons?sz=64&domain_url={new URL(link).hostname}"
 								alt="{title} favicon"
 							/>
-							<div>{hostname.replace(/^www\./, "")}</div>
+							<div>{new URL(link).hostname.replace(/^www\./, "")}</div>
 						</a>
 					{/each}
 				</div>
