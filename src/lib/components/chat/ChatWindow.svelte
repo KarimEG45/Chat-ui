@@ -1,11 +1,10 @@
 <script lang="ts">
-	import type { Message } from "$lib/types/Message";
+	import type { Message, MessageFile } from "$lib/types/Message";
 	import { createEventDispatcher, onDestroy, tick } from "svelte";
 
 	import CarbonSendAltFilled from "~icons/carbon/send-alt-filled";
 	import CarbonExport from "~icons/carbon/export";
 	import CarbonStopFilledAlt from "~icons/carbon/stop-filled-alt";
-	import CarbonClose from "~icons/carbon/close";
 	import CarbonCheckmark from "~icons/carbon/checkmark";
 	import CarbonCaretDown from "~icons/carbon/caret-down";
 
@@ -15,6 +14,7 @@
 	import StopGeneratingBtn from "../StopGeneratingBtn.svelte";
 	import type { Model } from "$lib/types/Model";
 	import WebSearchToggle from "../WebSearchToggle.svelte";
+	import ToolsMenu from "../ToolsMenu.svelte";
 	import LoginModal from "../LoginModal.svelte";
 	import { page } from "$app/stores";
 	import FileDropzone from "./FileDropzone.svelte";
@@ -32,6 +32,7 @@
 	import SystemPromptModal from "../SystemPromptModal.svelte";
 	import ChatIntroduction from "./ChatIntroduction.svelte";
 	import { useConvTreeStore } from "$lib/stores/convTree";
+	import UploadedFile from "./UploadedFile.svelte";
 
 	export let messages: Message[] = [];
 	export let loading = false;
@@ -92,8 +93,8 @@
 		(lastMessage.from === "user" ||
 			lastMessage.updates?.findIndex((u) => u.type === "status" && u.status === "error") !== -1);
 
-	$: sources = files?.map((file) =>
-		file2base64(file).then((value) => ({ type: "base64", value, mime: file.type }))
+	$: sources = files?.map<Promise<MessageFile>>((file) =>
+		file2base64(file).then((value) => ({ type: "base64", value, mime: file.type, name: file.name }))
 	);
 
 	function onShare() {
@@ -235,22 +236,12 @@
 			<div class="flex flex-row flex-wrap justify-center gap-2.5 max-md:pb-3">
 				{#each sources as source, index}
 					{#await source then src}
-						<div class="relative h-16 w-16 overflow-hidden rounded-lg shadow-lg">
-							<img
-								src={`data:${src.mime};base64,${src.value}`}
-								alt="input content"
-								class="h-full w-full rounded-lg bg-gray-400 object-cover dark:bg-gray-900"
-							/>
-							<!-- add a button on top that deletes this image from sources -->
-							<button
-								class="absolute left-1 top-1"
-								on:click={() => {
-									files = files.filter((_, i) => i !== index);
-								}}
-							>
-								<CarbonClose class="text-md font-black text-gray-300  hover:text-gray-100" />
-							</button>
-						</div>
+						<UploadedFile
+							file={src}
+							on:close={() => {
+								files = files.filter((_, i) => i !== index);
+							}}
+						/>
 					{/await}
 				{/each}
 			</div>
@@ -258,8 +249,12 @@
 
 		<div class="w-full">
 			<div class="flex w-full pb-3">
-				{#if $page.data.settings?.searchEnabled && !assistant}
-					<WebSearchToggle />
+				{#if !assistant}
+					{#if currentModel.tools}
+						<ToolsMenu {loading} />
+					{:else if $page.data.settings?.searchEnabled}
+						<WebSearchToggle />
+					{/if}
 				{/if}
 				{#if loading}
 					<StopGeneratingBtn classNames="ml-auto" on:click={() => dispatch("stop")} />
@@ -276,7 +271,7 @@
 					/>
 				{:else}
 					<div class="ml-auto gap-2">
-						{#if currentModel.multimodal}
+						{#if currentModel.multimodal || currentModel.tools}
 							<UploadBtn bind:files classNames="ml-auto" />
 						{/if}
 						{#if messages && lastMessage && lastMessage.interrupted && !isReadOnly}
